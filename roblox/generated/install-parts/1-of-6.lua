@@ -10,7 +10,7 @@
 	  - ReplicatedStorage.Shared.Remote
 	  - ServerScriptService.Night99.BatteryService
 	  - ServerScriptService.Night99.LightingService
-	  - ServerScriptService.Night99.Main.server
+	  - ServerScriptService.Night99.Main
 
 	Drag generated/Night99.rbxmx onto Workspace first, then press Play once
 	you have pasted every part.
@@ -301,7 +301,7 @@ end
 return LightingService]==],
 	},
 	{
-		path = { "ServerScriptService", "Night99", "Main.server" },
+		path = { "ServerScriptService", "Night99", "Main" },
 		className = "Script",
 		source = [==[--[=[
 	Night 99 server entry point.

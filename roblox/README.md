@@ -112,7 +112,8 @@ src/client/               Flashlight, HUD, camera, monster tracker
 tools/
   build-map.mjs           Generates generated/*.rbxmx from a fixed seed
   build-installer.mjs     Generates generated/InstallNight99.lua
-  mounts.mjs              Where src/** lands in the DataModel, shared by both
+  mounts.mjs              Where src/** lands in the DataModel, shared by the
+                          installer, the Rojo cross-check and check-refs.mjs
   rbxxml.mjs              Minimal .rbxmx writer
   check-lua.mjs           Lua parse check
   check-refs.mjs          require/remote/map-name cross-reference check
@@ -123,6 +124,15 @@ tools/
 
 `Workspace.Night99` holds everything map-related, so it never collides with
 Studio's default baseplate or anything you add.
+
+**Filename rule:** a `.lua` file's instance name is the filename minus `.lua`, and
+nothing else. Rojo does *not* strip a `.client` / `.server` suffix, so
+`HUD.client.lua` becomes an instance called `HUD.client` — and any
+`WaitForChild("HUD")` then hangs forever with no error. The directory already says
+which side a script runs on (`src/client`, `src/server`), so these files are
+deliberately named plain: `HUD.lua`, `Main.lua`. `check-refs.mjs` fails the build if
+a `.client`/`.server` suffix reappears, and `check-install.mjs` fails if the
+installer's target paths and Rojo's ever stop matching.
 
 ---
 
@@ -210,19 +220,26 @@ rig the Unity original used.
 - **`check-refs.mjs`** — builds the instance tree Rojo would produce from
   `default.project.json`, then verifies that every `require()` chain resolves to a
   real ModuleScript, every awaited RemoteEvent is created by `Net.lua`, every
-  cross-service call exists, every `Config.*` key read is defined, and every
-  `workspace:WaitForChild(...)` name exists in the generated map.
+  cross-service call exists, every `Config.*` key read is defined, every
+  `workspace:WaitForChild(...)` name exists in the generated map, and no filename
+  carries a `.client`/`.server` suffix that would rename its instance.
 - **`check-install.mjs`** — parses `generated/InstallNight99.lua` and every file in
   `generated/install-parts/`, then diffs each embedded source against `src/`, so a
   paste installer can never ship a stale or mangled copy of a script. Also checks
-  the parts cover each script exactly once.
+  the parts cover each script exactly once, and that every target path matches what
+  Rojo would create — the installer and `rojo serve` are two ways to install the
+  same scripts and must never disagree about where one lives.
 
 `npm test` adds `audit-map.mjs` (no tree inside a clearing, no pickup buried in
 geometry, no spawn point in the pit) and `test-check-install.ps1`, which breaks the
-installers six ways and asserts the checker fails each time.
+installers seven ways and asserts the checker fails each time.
 
 All of these are validated against deliberately broken copies of the project, so a
-clean run means something.
+clean run means something. That last point is not decoration: the cross-reference
+checker originally asserted that Rojo strips `.client`/`.server` from instance
+names, which it does not — so it cheerfully validated a `WaitForChild("HUD")` that
+could never resolve and would have hung the game on the first Play. The bug lived in
+the validator, which is why the validators get fault-injected too.
 
 ---
 

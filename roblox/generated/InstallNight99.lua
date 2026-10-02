@@ -304,7 +304,7 @@ end
 return LightingService]==],
 	},
 	{
-		path = { "ServerScriptService", "Night99", "Main.server" },
+		path = { "ServerScriptService", "Night99", "Main" },
 		className = "Script",
 		source = [==[--[=[
 	Night 99 server entry point.
@@ -982,7 +982,7 @@ end
 return PlayerService]==],
 	},
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "CameraRig.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "CameraRig" },
 		className = "ModuleScript",
 		source = [==[--[=[
 	Camera.
@@ -1074,7 +1074,7 @@ end
 return CameraRig]==],
 	},
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "Flashlight.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "Flashlight" },
 		className = "ModuleScript",
 		source = [==[--[=[
 	Flashlight.
@@ -1223,7 +1223,7 @@ end
 return Flashlight]==],
 	},
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "HUD.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "HUD" },
 		className = "ModuleScript",
 		source = [==[--[=[
 	Night 99 HUD.
@@ -1561,7 +1561,7 @@ end
 return HUD]==],
 	},
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "Main.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "Main" },
 		className = "LocalScript",
 		source = [==[--[=[
 	Night 99 client entry point.
@@ -1593,7 +1593,7 @@ MonsterClient.Init(net)
 CameraRig.Init()]==],
 	},
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "MonsterClient.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "MonsterClient" },
 		className = "ModuleScript",
 		source = [==[--[=[
 	Read-only mirror of the monster's server state.

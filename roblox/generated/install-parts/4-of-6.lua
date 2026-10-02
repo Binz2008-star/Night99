@@ -6,8 +6,8 @@
 	  01, 02, 03, ... (each one is independent and safe to repeat).
 
 	This part installs:
-	  - StarterPlayer.StarterPlayerScripts.Night99.CameraRig.client
-	  - StarterPlayer.StarterPlayerScripts.Night99.Flashlight.client
+	  - StarterPlayer.StarterPlayerScripts.Night99.CameraRig
+	  - StarterPlayer.StarterPlayerScripts.Night99.Flashlight
 
 	Drag generated/Night99.rbxmx onto Workspace first, then press Play once
 	you have pasted every part.
@@ -15,7 +15,7 @@
 
 local SOURCES = {
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "CameraRig.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "CameraRig" },
 		className = "ModuleScript",
 		source = [==[--[=[
 	Camera.
@@ -107,7 +107,7 @@ end
 return CameraRig]==],
 	},
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "Flashlight.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "Flashlight" },
 		className = "ModuleScript",
 		source = [==[--[=[
 	Flashlight.

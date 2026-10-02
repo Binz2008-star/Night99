@@ -14,7 +14,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
-import { MOUNTS, classFor, listLuaFiles, mountPath } from "./mounts.mjs";
+import { MOUNTS, classFor, listLuaFiles, mountPath, rojoTreeFrom } from "./mounts.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GENERATED = `${ROOT}/generated`;
@@ -224,6 +224,25 @@ for (const path of onDisk.keys()) {
 	if (!covered.has(path)) errors.push(`install-parts: no part covers ${path}`);
 }
 
+// --- the installer and Rojo must target the same instances ---------------------
+//
+// The paste installer and `rojo serve` are two ways to install the same scripts.
+// If they disagree about an instance name, one of them works and the other hangs,
+// so the disagreement has to be impossible rather than merely unlikely.
+let rojoMatch = 0;
+try {
+	const rojo = rojoTreeFrom(ROOT, JSON.parse(readFileSync(`${ROOT}/default.project.json`, "utf8")));
+	for (const path of onDisk.keys()) {
+		if (!rojo.has(path)) {
+			errors.push(`rojo disagreement: installer targets ${path} but Rojo would not create it`);
+		} else {
+			rojoMatch++;
+		}
+	}
+} catch (err) {
+	errors.push(`cannot cross-check against default.project.json: ${err.message}`);
+}
+
 // --- report --------------------------------------------------------------------
 if (errors.length > 0) {
 	for (const e of errors) console.error(`  X  ${e}`);
@@ -233,4 +252,5 @@ if (errors.length > 0) {
 
 console.log(`  .  InstallNight99.lua parses, ${wholeCount} scripts byte-identical to src/`);
 console.log(`  .  install-parts/ ${partFiles.length} parts cover the same ${covered.size} scripts`);
+console.log(`  .  all ${rojoMatch} target paths match what Rojo would create`);
 console.log("Installer OK.");

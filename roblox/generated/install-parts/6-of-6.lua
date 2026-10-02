@@ -6,8 +6,8 @@
 	  01, 02, 03, ... (each one is independent and safe to repeat).
 
 	This part installs:
-	  - StarterPlayer.StarterPlayerScripts.Night99.Main.client
-	  - StarterPlayer.StarterPlayerScripts.Night99.MonsterClient.client
+	  - StarterPlayer.StarterPlayerScripts.Night99.Main
+	  - StarterPlayer.StarterPlayerScripts.Night99.MonsterClient
 
 	Drag generated/Night99.rbxmx onto Workspace first, then press Play once
 	you have pasted every part.
@@ -15,7 +15,7 @@
 
 local SOURCES = {
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "Main.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "Main" },
 		className = "LocalScript",
 		source = [==[--[=[
 	Night 99 client entry point.
@@ -47,7 +47,7 @@ MonsterClient.Init(net)
 CameraRig.Init()]==],
 	},
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "MonsterClient.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "MonsterClient" },
 		className = "ModuleScript",
 		source = [==[--[=[
 	Read-only mirror of the monster's server state.

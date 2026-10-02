@@ -12,6 +12,8 @@ import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join, resolve, relative, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { rojoName } from "./mounts.mjs";
+
 const ROOT = resolve(fileURLToPath(import.meta.url), "..", "..");
 const problems = [];
 const notes = [];
@@ -64,36 +66,57 @@ for (const dir of ["src/shared", "src/server", "src/client"]) {
 	}
 }
 
-/** Rojo strips .client/.server from the instance name. */
-function instanceNameForLua(file) {
-	const name = basename(file, ".lua");
-	return name.replace(/\.(client|server)$/, "");
+/**
+ * The instance name Rojo gives a .lua file. Delegates to mounts.mjs so this file
+ * and the paste installer cannot disagree about names -- when they did, this
+ * checker's own assumption hid a WaitForChild("HUD") that could never resolve.
+ */
+const instanceNameForLua = (file) => rojoName(basename(file));
+
+/** Which side of the network a module runs on: the mount directory, not the filename. */
+function luaContext(dir) {
+	if (dir.endsWith("server")) return "server";
+	if (dir.endsWith("client")) return "client";
+	return "shared";
 }
 
-function luaContext(file) {
-	const name = basename(file, ".lua");
-	if (name.endsWith(".client")) return "client";
-	if (name.endsWith(".server")) return "server";
-	return "shared";
+/**
+ * A .client/.server suffix on a filename is a trap: it survives into the instance
+ * name (see instanceNameForLua) and then every WaitForChild("Base") silently hangs
+ * forever. src/shared, src/server and src/client already say which side a script
+ * runs on, so the suffix can only cost us.
+ */
+function checkFilenameSuffixes(dir) {
+	for (const file of collectLuaFiles(resolve(ROOT, dir))) {
+		const name = basename(file, ".lua");
+		if (/\.(client|server)$/.test(name)) {
+			problems.push(
+				`${relative(ROOT, file).replace(/\\/g, "/")}: filename ends in .client/.server, ` +
+					`so the instance will be named "${name}" -- not "${name.replace(/\.(client|server)$/, "")}". ` +
+					`Either rename the file or require "${name}".`
+			);
+		}
+	}
 }
 
 const project = readJSON("default.project.json");
 
-/** Register every .lua file under a Rojo directory, honouring .client/.server. */
+/** Register every .lua file under a Rojo directory. */
 function addModules(instancePath, dir) {
 	const target = resolve(ROOT, dir);
 	if (!existsSync(target)) {
 		problems.push(`default.project.json references a path that does not exist: ${dir}`);
 		return;
 	}
+	checkFilenameSuffixes(dir);
 	for (const file of collectLuaFiles(target)) {
 		const rel = relative(target, file).replace(/\\/g, "/");
-		const parts = rel.split("/");
-		const names = parts.map((p, i) => (i === parts.length - 1 ? instanceNameForLua(file) : p.replace(/\.(client|server)$/, "")));
+		const names = rel.split("/");
+		names[names.length - 1] = instanceNameForLua(file);
 		instances.set(`${instancePath}.${names.join(".")}`, {
 			className: "ModuleScript",
 			path: relative(ROOT, file),
-			context: luaContext(file),
+			context: luaContext(dir),
 		});
 	}
 }

@@ -11,6 +11,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $generated = Join-Path $root "generated"
 $file = Join-Path $generated "InstallNight99.lua"
 $partsDir = Join-Path $generated "install-parts"
+$projectFile = Join-Path $root "default.project.json"
 $backupDir = Join-Path $generated ".install-backup"
 
 function Invoke-Checker {
@@ -34,6 +35,7 @@ if (Test-Path $backupDir) { Remove-Item $backupDir -Recurse -Force }
 New-Item -ItemType Directory -Force $backupDir | Out-Null
 Copy-Item $file $backupDir -Force
 Copy-Item $partsDir (Join-Path $backupDir "install-parts") -Recurse -Force
+Copy-Item $projectFile (Join-Path $backupDir "default.project.json") -Force
 
 $original = Get-Content $file -Raw
 
@@ -41,6 +43,7 @@ function Restore {
     Copy-Item (Join-Path $backupDir "InstallNight99.lua") $file -Force
     if (Test-Path $partsDir) { Remove-Item $partsDir -Recurse -Force }
     Copy-Item (Join-Path $backupDir "install-parts") $partsDir -Recurse -Force
+    Copy-Item (Join-Path $backupDir "default.project.json") $projectFile -Force
 }
 
 # Never corrupt a good baseline: if the installers are already dirty, regenerating
@@ -101,6 +104,15 @@ Test-Fault "corrupt a source inside a part" {
     $text = (Get-Content $p -Raw) -replace '(\r?\n\tMax = )100,', '${1}999,'
     [System.IO.File]::WriteAllText($p, $text)
 } "source differs for ReplicatedStorage\.Shared\.Config"
+
+# Break only the Rojo side of the naming contract: the installer and Rojo derive
+# their target paths from separate files, so moving one and not the other is the
+# exact failure this check exists for. Nothing else should fire, or the fault
+# would pass for the wrong reason.
+Test-Fault "installer and Rojo disagree on an instance name" {
+    $text = (Get-Content $projectFile -Raw) -replace '"Shared"\s*:\s*\{\s*(\r?\n\s*)"\$path"', '"RenamedShared": {$1"$path"'
+    [System.IO.File]::WriteAllText($projectFile, $text)
+} "rojo disagreement: installer targets ReplicatedStorage\.Shared\.Config"
 
 # Always restore, then prove the restore worked.
 Restore

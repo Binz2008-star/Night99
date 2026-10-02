@@ -6,7 +6,7 @@
 	  01, 02, 03, ... (each one is independent and safe to repeat).
 
 	This part installs:
-	  - StarterPlayer.StarterPlayerScripts.Night99.HUD.client
+	  - StarterPlayer.StarterPlayerScripts.Night99.HUD
 
 	Drag generated/Night99.rbxmx onto Workspace first, then press Play once
 	you have pasted every part.
@@ -14,7 +14,7 @@
 
 local SOURCES = {
 	{
-		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "HUD.client" },
+		path = { "StarterPlayer", "StarterPlayerScripts", "Night99", "HUD" },
 		className = "ModuleScript",
 		source = [==[--[=[
 	Night 99 HUD.
