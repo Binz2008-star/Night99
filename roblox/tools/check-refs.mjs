@@ -423,17 +423,184 @@ for (const file of allLua) {
 // --- Config keys -------------------------------------------------------------
 
 const configText = read("src/shared/Config.lua");
-const definedKeys = new Set([...configText.matchAll(/^Config\.(\w+)\s*=/gm)].map((m) => m[1]));
+
+/**
+ * Every key Config.lua actually defines: the sections, and each "Section.Field".
+ *
+ * Read from the source rather than hardcoded so renaming a value immediately breaks
+ * every script reading the old name. Checking only the section is what let
+ * `config.Map.Monster.HeightOffset` through -- Monster is a real section, but
+ * HeightOffset lives under Config.Monster, so the monster threw
+ * "attempt to index nil with 'HeightOffset'" sixty times a second during play.
+ */
+function parseConfigKeys(text) {
+	const sections = new Set();
+	const leaves = new Set();
+	let current = null;
+
+	for (const line of text.split(/\r?\n/)) {
+		const open = line.match(/^Config\.(\w+)\s*=\s*\{/);
+		if (open) {
+			current = open[1];
+			sections.add(current);
+			continue;
+		}
+		if (/^\}/.test(line)) {
+			current = null;
+			continue;
+		}
+		const field = line.match(/^\t+(\w+)\s*=/);
+		if (field && current) leaves.add(`${current}.${field[1]}`);
+	}
+	return { sections, leaves };
+}
+
+const configKeys = parseConfigKeys(configText);
+
+/** `local X = require(<balanced arg>)` pairs, in source order. */
+function findRequireBindings(text) {
+	const out = [];
+	for (const m of text.matchAll(/local\s+(\w+)\s*=\s*require\s*\(/g)) {
+		const open = m.index + m[0].length - 1;
+		let depth = 0;
+		let j = open;
+		for (; j < text.length; j++) {
+			if (text[j] === "(") depth++;
+			else if (text[j] === ")") {
+				depth--;
+				if (depth === 0) break;
+			}
+		}
+		out.push({ name: m[1], arg: text.slice(open + 1, j) });
+	}
+	return out;
+}
+
+const splitNames = (s) => s.split(",").map((x) => x.trim()).filter(Boolean);
+
+/**
+ * Which names hold the Config module, resolved across the whole project.
+ *
+ * The scripts do not all reach Config the same way, and matching only the obvious
+ * spelling validates nothing while still reporting green. Some files require Config
+ * directly; the server modules take it as an injected argument --
+ * `function MonsterService.Init(c, n, p)`, called from Main.lua as
+ * `MonsterService.Init(Config, Net, Players)`, then parked in a lower-cased forward
+ * declaration (`local config, net, players`) via `config = c`.
+ *
+ * Matching only `local X = require(...Config...)` found the capital-C name and then
+ * skipped every actual `config.Monster.*` read, so this check reported green while
+ * the monster threw "attempt to index nil" sixty times a second. Call sites have to
+ * be followed across files for that reason: the callee's parameter list lives in
+ * MonsterService.lua but the argument that reveals it lives in Main.lua.
+ *
+ * Single-character names bridge those two steps but are never validated themselves:
+ * `c` is also a perfectly ordinary loop variable, so checking `c.Width` would fire on
+ * innocent code.
+ */
+const fnParams = new Map();
+const allCalls = [];
+const allCopies = [];
+
+for (const file of allLua) {
+	const text = readFileSync(file, "utf8");
+	if (relative(ROOT, file).replace(/\\/g, "/") === "src/shared/Config.lua") continue;
+
+	for (const m of text.matchAll(/function\s+([\w.]+)\s*\(([^)]*)\)/g)) {
+		fnParams.set(m[1], splitNames(m[2]));
+	}
+	for (const m of text.matchAll(/([\w.]+)\s*\(([^()]*)\)/g)) {
+		allCalls.push([m[1], splitNames(m[2])]);
+	}
+	// `dst = src` with bare identifiers on both sides: covers `config = c` and
+	// `local cfg = Config`. The leading [^\w.] keeps table fields out (`t.x = y`).
+	for (const m of text.matchAll(/(^|[^\w.])([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)[ \t]*$/gm)) {
+		allCopies.push([m[2], m[3]]);
+	}
+}
+
+const configNames = new Set();
+for (const file of allLua) {
+	const text = readFileSync(file, "utf8");
+	if (relative(ROOT, file).replace(/\\/g, "/") === "src/shared/Config.lua") continue;
+	for (const binding of findRequireBindings(text)) {
+		if (/\bConfig\b/.test(binding.arg)) configNames.add(binding.name);
+	}
+}
+
+// One pass is not enough: the parameter is bound by a call site in a *different* file
+// from the one that declares it, and `config = c` sits at the bottom of the module.
+for (let changed = true; changed; ) {
+	changed = false;
+	const add = (name) => {
+		if (!configNames.has(name)) {
+			configNames.add(name);
+			changed = true;
+		}
+	};
+	for (const [callee, args] of allCalls) {
+		const params = fnParams.get(callee);
+		if (!params) continue;
+		for (let i = 0; i < params.length && i < args.length; i++) {
+			if (configNames.has(args[i])) add(params[i]);
+		}
+	}
+	for (const [dst, src] of allCopies) {
+		if (configNames.has(src)) add(dst);
+	}
+}
+
+const checkableNames = [...configNames].filter((n) => n.length > 1);
+
+/** Is `Section`, or `Section.Field`, a path Config.lua actually defines? */
+function isRealConfigPath(segments) {
+	if (!configKeys.sections.has(segments[0])) return false;
+	if (segments.length === 1) return true;
+	return configKeys.leaves.has(`${segments[0]}.${segments[1]}`);
+}
 
 for (const file of allLua) {
 	const rel = relative(ROOT, file).replace(/\\/g, "/");
 	if (rel === "src/shared/Config.lua") continue;
 	const text = readFileSync(file, "utf8");
-	for (const m of text.matchAll(/Config\.(\w+)\./g)) {
-		if (!definedKeys.has(m[1])) problems.push(`${rel}: reads Config.${m[1]} which src/shared/Config.lua does not define`);
+
+	// Only the resolved names this file actually mentions, so one module's injected
+	// parameter cannot make an unrelated file look like it reads Config.
+	const mine = checkableNames.filter((n) => new RegExp(`\\b${n}\\b`).test(text));
+	const pattern = mine.map((a) => a.replace(/\$/g, "\\$")).join("|");
+	if (!pattern) {
+		// Plenty of files genuinely never touch Config (Net, Remote, client/Main), so
+		// having no alias is not itself wrong. What is wrong is a file that *mentions*
+		// Config yet gets no alias -- that is the signature of the alias analysis
+		// silently matching nothing, which is how this whole check sat inert while
+		// reporting green. Only the specific shape is an error.
+		if (/\b[Cc]onfig\b/.test(text)) {
+			problems.push(`${rel}: mentions Config but no resolved alias covers it, so its settings are not validated`);
+		}
+		continue;
+	}
+
+	// Up to three dotted segments: Config.lua has no nested tables, so anything past
+	// Section.Field is already a mistake, and the extra segments make a good hint.
+	for (const m of text.matchAll(new RegExp(`\\b(?:${pattern})((?:\\.\\w+){1,3})`, "g"))) {
+		const segments = m[1].split(".").filter(Boolean);
+		if (isRealConfigPath(segments)) continue;
+
+		const shown = segments.join(".");
+		const withoutPrefix = segments.slice(1);
+		const hint =
+			withoutPrefix.length && isRealConfigPath(withoutPrefix)
+				? ` Did you mean ${withoutPrefix.join(".")}?`
+				: "";
+
+		if (!configKeys.sections.has(segments[0])) {
+			problems.push(`${rel}: reads ${segments[0]} as a Config section, which Config.lua does not define`);
+		} else {
+			problems.push(`${rel}: reads ${shown}, but Config.lua defines no such key.${hint}`);
+		}
 	}
 }
-notes.push(`Config sections = [${[...definedKeys].join(", ")}]`);
+notes.push(`Config sections = [${[...configKeys.sections].join(", ")}], ${configKeys.leaves.size} keys`);
 
 // Informational only: config left unused by the scripts. Not an error -- some
 // values exist purely for designers, but a stale key is usually a typo.
@@ -443,19 +610,14 @@ const usedText = allLua
 	.map(({ text }) => text)
 	.join("\n");
 
-const unusedSections = [...definedKeys].filter((s) => !new RegExp(`[Cc]onfig\\.${s}\\b`).test(usedText));
-const unusedLeaves = [];
-for (const m of configText.matchAll(/^\t(\w+)\s*=\s*(.+?),?$/gm)) {
-	const key = m[1];
-	const owner = configText.slice(0, m.index).match(/^Config\.(\w+)\s*=/);
-	if (!owner) continue;
-	if (!new RegExp(`[Cc]onfig\\.${owner[1]}\\.${key}\\b`).test(usedText)) {
-		unusedLeaves.push(`${owner[1]}.${key}`);
-	}
-}
-if (unusedSections.length || unusedLeaves.length) {
-	notes.push(`config not read by any script: ${[...unusedSections, ...unusedLeaves].join(", ")}`);
-}
+const escaped = (path) => path.replace(/\./g, "\\.");
+const isUsed = (path) => new RegExp(`\\b[Cc]onfig\\.${escaped(path)}\\b`).test(usedText);
+
+const unused = [
+	...[...configKeys.sections].filter((s) => !isUsed(s)),
+	...[...configKeys.leaves].filter((leaf) => !isUsed(leaf)),
+];
+if (unused.length) notes.push(`config not read by any script: ${unused.join(", ")}`);
 
 // --- report ------------------------------------------------------------------
 

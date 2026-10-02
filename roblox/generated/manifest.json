@@ -41,7 +41,7 @@
       "instancePath": "ServerScriptService.Night99.MonsterService",
       "className": "ModuleScript",
       "sourcePath": "C:/Users/loyal/Projects/Night99-Roblox/roblox/src/server/MonsterService.lua",
-      "bytes": 7496
+      "bytes": 7488
     },
     {
       "instancePath": "ServerScriptService.Night99.Net",
@@ -71,13 +71,13 @@
       "instancePath": "StarterPlayer.StarterPlayerScripts.Night99.Flashlight",
       "className": "ModuleScript",
       "sourcePath": "C:/Users/loyal/Projects/Night99-Roblox/roblox/src/client/Flashlight.lua",
-      "bytes": 3920
+      "bytes": 4046
     },
     {
       "instancePath": "StarterPlayer.StarterPlayerScripts.Night99.HUD",
       "className": "ModuleScript",
       "sourcePath": "C:/Users/loyal/Projects/Night99-Roblox/roblox/src/client/HUD.lua",
-      "bytes": 10214
+      "bytes": 11012
     },
     {
       "instancePath": "StarterPlayer.StarterPlayerScripts.Night99.Main",

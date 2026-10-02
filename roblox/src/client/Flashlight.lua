@@ -62,7 +62,8 @@ local function attach(character)
 	spot.Range = Config.Light.Range
 	spot.Brightness = Config.Light.Brightness
 	spot.Shadows = true
-	spot.ShadowSoftness = 0.4
+	-- No ShadowSoftness here: that is a Lighting property, not a SpotLight one, and
+	-- assigning it throws "not a valid member of SpotLight" at runtime.
 	spot.Face = Enum.NormalId.Front
 	spot.Parent = head
 

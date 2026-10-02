@@ -11,7 +11,7 @@
     "check:refs": "node tools/check-refs.mjs",
     "check:install": "node tools/check-install.mjs",
     "check:map": "node tools/audit-map.mjs",
-    "test": "node tools/check-lua.mjs && node tools/check-refs.mjs && node tools/check-install.mjs && node tools/audit-map.mjs && powershell -ExecutionPolicy Bypass -File tools/test-check-install.ps1",
+    "test": "node tools/check-lua.mjs && node tools/check-refs.mjs && node tools/check-install.mjs && node tools/audit-map.mjs && powershell -ExecutionPolicy Bypass -File tools/test-check-install.ps1 && powershell -ExecutionPolicy Bypass -File tools/test-static-checks.ps1",
     "serve": "rojo serve",
     "build:place": "rojo build -o Night99.rbxl"
   },

@@ -434,7 +434,7 @@ local function chooseWanderPoint()
 	local dist = math.random() * radius
 	return Vector3.new(
 		math.clamp(position.X + math.cos(angle) * dist, -config.Map.HalfExtent, config.Map.HalfExtent),
-		config.Map.Monster.HeightOffset,
+		config.Monster.HeightOffset,
 		math.clamp(position.Z + math.sin(angle) * dist, -config.Map.HalfExtent, config.Map.HalfExtent)
 	)
 end
@@ -513,7 +513,7 @@ local function step(dt)
 		-- Keep it inside the play area.
 		position = Vector3.new(
 			math.clamp(position.X, -config.Map.HalfExtent, config.Map.HalfExtent),
-			config.Map.Monster.HeightOffset,
+			config.Monster.HeightOffset,
 			math.clamp(position.Z, -config.Map.HalfExtent, config.Map.HalfExtent)
 		)
 		local targetFacing = math.atan(-dir.X, -dir.Z)
@@ -1140,7 +1140,8 @@ local function attach(character)
 	spot.Range = Config.Light.Range
 	spot.Brightness = Config.Light.Brightness
 	spot.Shadows = true
-	spot.ShadowSoftness = 0.4
+	-- No ShadowSoftness here: that is a Lighting property, not a SpotLight one, and
+	-- assigning it throws "not a valid member of SpotLight" at runtime.
 	spot.Face = Enum.NormalId.Front
 	spot.Parent = head
 
@@ -1260,13 +1261,36 @@ local COLORS = {
 	panel = Color3.fromRGB(8, 10, 14),
 }
 
-local function new(className, props, children)
-	local instance = Instance.new(className)
-	for key, value in props do
-		instance[key] = value
+-- Instance.new only constructs Instances. Datatypes such as UDim and
+-- NumberSequence are not Instances and have their own constructors -- handing one to
+-- Instance.new fails at runtime with a bare "Unable to create an Instance of type",
+-- which cost a playtest to find because every static check passes on it. Dispatch
+-- them here so the same mistake cannot be made twice.
+local DATATYPE_CONSTRUCTORS = {
+	UDim = UDim.new,
+	UDim2 = UDim2.new,
+	Vector2 = Vector2.new,
+	Vector3 = Vector3.new,
+	Color3 = Color3.new,
+	NumberSequence = NumberSequence.new,
+	NumberSequenceKeypoint = NumberSequenceKeypoint.new,
+}
+
+local function new(className, ...)
+	local construct = DATATYPE_CONSTRUCTORS[className]
+	if construct then
+		return construct(...)
 	end
-	for _, child in ipairs(children or {}) do
-		instance:AddChild(child)
+
+	local instance = Instance.new(className)
+	local props, children = ...
+	if type(props) == "table" then
+		for key, value in props do
+			instance[key] = value
+		end
+		for _, child in ipairs(children or {}) do
+			instance:AddChild(child)
+		end
 	end
 	return instance
 end

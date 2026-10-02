@@ -110,7 +110,7 @@ local function chooseWanderPoint()
 	local dist = math.random() * radius
 	return Vector3.new(
 		math.clamp(position.X + math.cos(angle) * dist, -config.Map.HalfExtent, config.Map.HalfExtent),
-		config.Map.Monster.HeightOffset,
+		config.Monster.HeightOffset,
 		math.clamp(position.Z + math.sin(angle) * dist, -config.Map.HalfExtent, config.Map.HalfExtent)
 	)
 end
@@ -189,7 +189,7 @@ local function step(dt)
 		-- Keep it inside the play area.
 		position = Vector3.new(
 			math.clamp(position.X, -config.Map.HalfExtent, config.Map.HalfExtent),
-			config.Map.Monster.HeightOffset,
+			config.Monster.HeightOffset,
 			math.clamp(position.Z, -config.Map.HalfExtent, config.Map.HalfExtent)
 		)
 		local targetFacing = math.atan(-dir.X, -dir.Z)

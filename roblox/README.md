@@ -47,7 +47,9 @@ created. This is safe to repeat: it replaces `Source` on scripts that already ex
 
 **4. Set Lighting.** **Properties → Lighting → Technology** → **Future** (or leave
 **ShadowMap**). This one property cannot be set from a script — everything else in
-`LightingService` is applied at runtime.
+`LightingService` is applied at runtime. It is not merely unwritable: reading it
+from a plugin-context script fails outright with `lacking capability RobloxScript`,
+so there is no clever workaround either. It has to be set in the editor.
 
 **5. Press Play.** You spawn in the fire-pit clearing with a battery at 100 and the
 flashlight off.
@@ -118,11 +120,13 @@ tools/
   mounts.mjs              Where src/** lands in the DataModel, shared by the
                           installer, the Rojo cross-check and check-refs.mjs
   rbxxml.mjs              Minimal .rbxmx writer
-  check-lua.mjs           Lua parse check
-  check-refs.mjs          require/remote/map-name cross-reference check
+  check-lua.mjs           Lua parse + datatype/Instance.new check
+  check-refs.mjs          require/remote/map-name/Config-key cross-reference check
   check-install.mjs       Proves the installer matches src/ byte-for-byte
   audit-map.mjs           Map layout audit
+  verify-studio-parity.mjs  Compares the sources installed in Studio against src/
   test-check-install.ps1  Fault injection for check-install.mjs
+  test-static-checks.ps1  Fault injection for check-lua and check-refs
 ```
 
 `Workspace.Night99` holds everything map-related, so it never collides with
@@ -219,7 +223,11 @@ rig the Unity original used.
 
 `npm run check` runs three things Studio would otherwise catch for you:
 
-- **`check-lua.mjs`** — parses every `.lua` file (catches syntax errors).
+- **`check-lua.mjs`** — parses every `.lua` file (catches syntax errors), and flags
+  Roblox *datatypes* (`UDim`, `NumberSequence`, `UDim2`, …) being handed to
+  `Instance.new`. A datatype is not an Instance, so that throws at runtime and takes
+  the whole script's `Init` chain with it. Helpers that build instances are allowed
+  to forward datatypes only if they explicitly dispatch them (`UDim = UDim.new`).
 - **`check-refs.mjs`** — builds the instance tree Rojo would produce from
   `default.project.json`, then verifies that every `require()` chain resolves to a
   real ModuleScript, every awaited RemoteEvent is created by `Net.lua`, every
@@ -236,15 +244,25 @@ rig the Unity original used.
   byte size.
 
 `npm test` adds `audit-map.mjs` (no tree inside a clearing, no pickup buried in
-geometry, no spawn point in the pit) and `test-check-install.ps1`, which breaks the
-generated artifacts ten ways and asserts the checker fails each time.
+geometry, no spawn point in the pit), `test-check-install.ps1`, which breaks the
+generated artifacts ten ways and asserts the checker fails each time, and
+`test-static-checks.ps1`, which breaks `src/` nine ways — five faults and four
+"this is still correct" cases — and asserts `check-lua` and `check-refs` sort each
+one correctly.
 
 All of these are validated against deliberately broken copies of the project, so a
-clean run means something. That last point is not decoration: the cross-reference
-checker originally asserted that Rojo strips `.client`/`.server` from instance
-names, which it does not — so it cheerfully validated a `WaitForChild("HUD")` that
-could never resolve and would have hung the game on the first Play. The bug lived in
-the validator, which is why the validators get fault-injected too.
+clean run means something. That last point is not decoration, twice over: the
+cross-reference checker originally asserted that Rojo strips `.client`/`.server`
+from instance names, which it does not — so it cheerfully validated a
+`WaitForChild("HUD")` that could never resolve and would have hung the game on the
+first Play. And the `Config` key check was, at first, validating **nothing at all**
+while reporting green: the server modules don't `require` Config, they are handed it
+(`MonsterService.Init(Config, Net, Players)`, stored as `config = c`), so a
+`local X = require(...Config...)` search matched zero files. Reading the code was not
+enough to catch that either — only fault injection did, because the check's own
+assumption about how the scripts reach Config was the thing that was wrong. The bug
+lived in the validator both times, which is why the validators get fault-injected
+too.
 
 ---
 
@@ -258,7 +276,3 @@ the validator, which is why the validators get fault-injected too.
   `tools/build-map.mjs` (`buildMonster`). Swap in a rig and point
   `MonsterService.Init` at it — only `Body` is used as the pivot, and the
   transform is driven by `PivotTo`, so an animated Model works as-is.
-- **Not play-tested in Studio.** Everything here is validated statically (see
-  Checks), not at runtime. The play-test checklist is at the top of this file;
-  the things most worth looking at first are the flashlight toggle, the monster
-  chase, and whether the battery drain feels right at your chosen `Config` values.
