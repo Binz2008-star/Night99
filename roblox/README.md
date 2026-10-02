@@ -28,8 +28,22 @@ Switch the viewport to see it.
 **3. Paste the code.** Open `generated/InstallNight99.lua` in any text editor, select
 all, copy. In Studio go to **View → Command Window**, paste, press **Enter**.
 
-You should see three `[Night99]` lines in the Output confirming the 14 scripts were
+You should see two `[Night99]` lines in the Output confirming the scripts were
 created. This is safe to repeat: it replaces `Source` on scripts that already exist.
+
+> **If the paste gets truncated** — 49 KB is a lot of text and some editors and chat
+> boxes will chop it — use `generated/install-parts/` instead. Same 14 scripts,
+> split into six small files:
+>
+> ```bash
+> roblox/generated/install-parts/1-of-6.lua
+> roblox/generated/install-parts/2-of-6.lua
+> ...
+> roblox/generated/install-parts/6-of-6.lua
+> ```
+>
+> Paste each one into the Command Window in order. Each is independent and safe to
+> repeat, so if part 3 fails you can just fix it and carry on.
 
 **4. Set Lighting.** **Properties → Lighting → Technology** → **Future** (or leave
 **ShadowMap**). This one property cannot be set from a script — everything else in
@@ -90,6 +104,8 @@ generated/                Build output -- all of it is plain text, reviewable in
   Landmarks.rbxmx         8 landmarks + 14 battery pickups + spawns
   Monster.rbxmx           The monster model
   InstallNight99.lua      Paste-into-Studio script installer (see above)
+  install-parts/          The same 14 scripts as six small pastes, for when one
+                          paste is too big for wherever you are pasting it
 src/shared/               Config + the RemoteEvent accessor
 src/server/               Authoritative game logic
 src/client/               Flashlight, HUD, camera, monster tracker
@@ -196,13 +212,14 @@ rig the Unity original used.
   real ModuleScript, every awaited RemoteEvent is created by `Net.lua`, every
   cross-service call exists, every `Config.*` key read is defined, and every
   `workspace:WaitForChild(...)` name exists in the generated map.
-- **`check-install.mjs`** — parses `generated/InstallNight99.lua` and diffs every
-  embedded source against `src/`, so the paste installer can never ship a stale or
-  mangled copy of a script.
+- **`check-install.mjs`** — parses `generated/InstallNight99.lua` and every file in
+  `generated/install-parts/`, then diffs each embedded source against `src/`, so a
+  paste installer can never ship a stale or mangled copy of a script. Also checks
+  the parts cover each script exactly once.
 
 `npm test` adds `audit-map.mjs` (no tree inside a clearing, no pickup buried in
-geometry, no spawn point in the pit) and `test-check-install.ps1`, which corrupts
-the installer four ways and asserts the checker fails each time.
+geometry, no spawn point in the pit) and `test-check-install.ps1`, which breaks the
+installers six ways and asserts the checker fails each time.
 
 All of these are validated against deliberately broken copies of the project, so a
 clean run means something.

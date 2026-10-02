@@ -1,57 +1,32 @@
-// Generates generated/InstallNight99.lua: a single Studio Command Bar script that
-// builds the whole Night99 script tree from sources embedded in the file.
+// Generates two ways to get the code into Roblox Studio without Rojo:
 //
-// Why this exists: the normal workflow is `rojo serve`, but Rojo is a compiled
-// executable and plenty of machines (including the one this was written on) have
-// Application Control / Smart App Control blocking it. Drag-and-dropping
-// generated/Night99.rbxmx gets you the map, but the code still needs a way in.
+//   generated/InstallNight99.lua        one paste, all 14 scripts
+//   generated/install-parts/NN-*.lua    the same 14 scripts as small numbered
+//                                        chunks, for when a single paste is too
+//                                        big for wherever you are pasting it
 //
-// The installer is deliberately plain: the embedded sources are byte-identical to
+// Why this exists: Rojo is a compiled executable and plenty of machines (including
+// the one this was written on) have Application Control / Smart App Control blocking
+// it. Dragging generated/Night99.rbxmx gets the map in, but the code needs a way in.
+//
+// Both forms are deliberately plain: the embedded sources are byte-identical to
 // src/**/*.lua, wrapped in long-bracket strings. tools/check-install.mjs proves that
 // by extracting them back out and diffing, so the only thing a paste can get wrong
 // is the short scaffolding around them.
 
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, rmSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { MOUNTS, classFor, listLuaFiles, mountPath } from "./mounts.mjs";
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const OUT_FILE = join(ROOT, "generated", "InstallNight99.lua");
+const OUT_DIR = join(ROOT, "generated");
+const OUT_FILE = join(OUT_DIR, "InstallNight99.lua");
+const PARTS_DIR = join(OUT_DIR, "install-parts");
 
-// Must match default.project.json. check-refs.mjs cross-checks the require() paths
-// in the Lua against this same layout, so drift shows up in `npm run check`.
-const MOUNTS = [
-	{ service: "ReplicatedStorage", dirs: ["Shared"], dir: "src/shared" },
-	{ service: "ServerScriptService", dirs: ["Night99"], dir: "src/server" },
-	{
-		service: "StarterPlayer",
-		dirs: ["StarterPlayerScripts", "Night99"],
-		dir: "src/client",
-	},
-];
-
-function luaFiles(dir) {
-	const abs = join(ROOT, dir);
-	return readdirSync(abs)
-		.filter((f) => f.endsWith(".lua"))
-		.sort()
-		.map((f) => ({ name: f.slice(0, -4), source: readFileSync(join(abs, f), "utf8") }));
-}
-
-/**
- * A file is a ModuleScript when its last meaningful line returns a table;
- * anything else under src/server is the bootstrap Script, and anything else under
- * src/client is a LocalScript (a plain Script in StarterPlayerScripts never runs).
- */
-function classFor(mount, source) {
-	const meaningful = source
-		.split("\n")
-		.map((l) => l.trim())
-		.filter((l) => l !== "" && !l.startsWith("--"));
-	const last = meaningful[meaningful.length - 1] ?? "";
-	if (/^return\b/.test(last)) return "ModuleScript";
-	return mount.dir === "src/client" ? "LocalScript" : "Script";
-}
+/** Soft cap on embedded source bytes per part, so no single paste is huge. */
+const MAX_PART_BYTES = 10_000;
 
 /**
  * Longest run of `]` in the source, so we can pick a long-bracket level that no
@@ -63,12 +38,13 @@ function longestRun(source) {
 	return longest;
 }
 
+// --- collect every script, in mount order -------------------------------------
 const entries = [];
 for (const mount of MOUNTS) {
-	for (const file of luaFiles(mount.dir)) {
+	for (const file of listLuaFiles({ readdirSync, readFileSync }, ROOT, mount.dir)) {
 		const eq = "=".repeat(longestRun(file.source) + 1);
 		entries.push({
-			path: [mount.service, ...mount.dirs, file.name],
+			path: mountPath(mount, file.name),
 			className: classFor(mount, file.source),
 			source: file.source,
 			open: `[${eq}[`,
@@ -77,35 +53,23 @@ for (const mount of MOUNTS) {
 	}
 }
 
-const sourceTable = entries
-	.map((e) => {
-		const path = e.path.map((p) => `"${p}"`).join(", ");
-		return [
-			"\t{",
-			`\t\tpath = { ${path} },`,
-			`\t\tclassName = "${e.className}",`,
-			`\t\tsource = ${e.open}${e.source}${e.close},`,
-			"\t},",
-		].join("\n");
-	})
-	.join("\n");
+// --- one installer, whatever subset of scripts it carries ----------------------
+function renderInstaller(list, header) {
+	const sourceTable = list
+		.map((e) => {
+			const path = e.path.map((p) => `"${p}"`).join(", ");
+			return [
+				"\t{",
+				`\t\tpath = { ${path} },`,
+				`\t\tclassName = "${e.className}",`,
+				`\t\tsource = ${e.open}${e.source}${e.close},`,
+				"\t},",
+			].join("\n");
+		})
+		.join("\n");
 
-const lua = `--[==[
-	Night99 -- Roblox Studio installer
-	Generated by tools/build-installer.mjs. Do not edit by hand; edit src/**,
-	then run \`npm run build\`.
-
-	HOW TO RUN
-	  1. Open Roblox Studio with any place (Baseplate is fine).
-	  2. Drag generated/Night99.rbxmx from Windows Explorer onto Workspace.
-	  3. View -> Command Window. Paste all of this. Press Enter.
-	  4. Press Play.
-
-	Safe to run more than once: existing scripts get their Source replaced, so
-	re-paste after editing anything in src/.
-
-	Prefer Rojo? \`rojo serve\` does the same thing live and is nicer to work with.
-	This file exists for machines where the Rojo executable is blocked.
+	return `--[==[
+${header}
 ]==]
 
 local SOURCES = {
@@ -154,13 +118,93 @@ for _, entry in ipairs(SOURCES) do
 end
 
 print(string.format("[Night99] %d scripts ready (%d new, %d updated)", #SOURCES, createdCount, updatedCount))
-print("[Night99] Next: drag generated/Night99.rbxmx onto Workspace, then press Play.")
 print("[Night99] Reminder: Lighting.Technology is not scriptable. Set Properties > Lighting > Technology to Future (or leave ShadowMap).")
 `;
+}
 
-writeFileSync(OUT_FILE, lua, "utf8");
-console.log(`InstallNight99.lua  ${(lua.length / 1024).toFixed(0).padStart(4)} KB  scripts=${entries.length}`);
+const WHOLE_HEADER = [
+	"\tNight99 -- Roblox Studio installer (all 14 scripts, one paste)",
+	"\tGenerated by tools/build-installer.mjs. Do not edit by hand; edit src/**,",
+	"\tthen run `npm run build`.",
+	"",
+	"\tHOW TO RUN",
+	"\t  1. Open Roblox Studio with any place (Baseplate is fine).",
+	"\t  2. Drag generated/Night99.rbxmx from Windows Explorer onto Workspace.",
+	"\t  3. View -> Command Window. Paste all of this. Press Enter.",
+	"\t  4. Press Play.",
+	"",
+	"\tToo big to paste in one go? Use generated/install-parts/ instead -- same",
+	"\tscripts, split into small numbered files.",
+	"",
+	"\tSafe to run more than once: existing scripts get their Source replaced, so",
+	"\tre-run after editing anything in src/.",
+	"",
+	"\tPrefer Rojo? `rojo serve` does the same thing live and is nicer to work with.",
+	"\tThese files exist for machines where the Rojo executable is blocked.",
+].join("\n");
+
+// --- chunking ------------------------------------------------------------------
+/** Greedy: start a new part once adding the next script would blow the budget. */
+function chunk(list) {
+	const parts = [];
+	let current = [];
+	let bytes = 0;
+	for (const e of list) {
+		const size = e.source.length;
+		if (current.length > 0 && bytes + size > MAX_PART_BYTES) {
+			parts.push(current);
+			current = [];
+			bytes = 0;
+		}
+		current.push(e);
+		bytes += size;
+	}
+	if (current.length > 0) parts.push(current);
+	return parts;
+}
+
+const parts = chunk(entries);
+
+// --- write ---------------------------------------------------------------------
+mkdirSync(OUT_DIR, { recursive: true });
+rmSync(PARTS_DIR, { recursive: true, force: true });
+mkdirSync(PARTS_DIR, { recursive: true });
+
+const whole = renderInstaller(entries, WHOLE_HEADER);
+writeFileSync(OUT_FILE, whole, "utf8");
+
+const widths = String(parts.length).length;
+let totalBytes = 0;
+
+for (const [i, part] of parts.entries()) {
+	const n = String(i + 1).padStart(widths, "0");
+	const header = [
+		`\tNight99 -- Roblox Studio installer, part ${n} of ${parts.length}`,
+		"\tGenerated by tools/build-installer.mjs. Do not edit by hand.",
+		"",
+		"\tPaste these into Studio's View -> Command Window in order:",
+		"\t  01, 02, 03, ... (each one is independent and safe to repeat).",
+		"",
+		"\tThis part installs:",
+		...part.map((e) => `\t  - ${e.path.join(".")}`),
+		"",
+		"\tDrag generated/Night99.rbxmx onto Workspace first, then press Play once",
+		"\tyou have pasted every part.",
+	].join("\n");
+
+	const lua = renderInstaller(part, header);
+	const file = join(PARTS_DIR, `${n}-of-${parts.length}.lua`);
+	writeFileSync(file, lua, "utf8");
+	totalBytes += lua.length;
+	console.log(
+		`  part ${n}  ${(lua.length / 1024).toFixed(1).padStart(5)} KB  ${part.length} scripts  ` +
+			part.map((e) => e.path.slice(-1)[0]).join(", ")
+	);
+}
+
+console.log(`\nInstallNight99.lua  ${(whole.length / 1024).toFixed(0).padStart(4)} KB  scripts=${entries.length}  (one paste)`);
+console.log(`install-parts/      ${(totalBytes / 1024).toFixed(0).padStart(4)} KB  parts=${parts.length}  (max ${(MAX_PART_BYTES / 1000).toFixed(0)} KB of source each)`);
 for (const e of entries) {
 	console.log(`  ${e.className.padEnd(13)} ${e.path.join(".")}`);
 }
-console.log("\nGenerated", OUT_FILE);
+console.log("\nGenerated", OUT_DIR);
