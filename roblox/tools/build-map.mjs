@@ -1170,14 +1170,11 @@ function buildMonster() {
 		);
 	}
 
-	const xml = model("Monster", kids);
 	// Park it below the world; the server takes control of its CFrame on start.
-	return document([
-		xml.replace(
-			`<string name="Name">Monster</string>`,
-			`<string name="Name">Monster</string>${CF("CFrame", [0, -400, 0])}`
-		),
-	]);
+	return model("Monster", kids).replace(
+		`<string name="Name">Monster</string>`,
+		`<string name="Name">Monster</string>${CF("CFrame", [0, -400, 0])}`
+	);
 }
 
 // =============================================================================
@@ -1185,7 +1182,7 @@ function buildMonster() {
 // =============================================================================
 
 function buildForest() {
-	return document([
+	return model("Forest", [
 		folder("Ground", buildGround()),
 		folder("Boundary", buildBoundary()),
 		folder("Treeline", buildTreeline()),
@@ -1217,15 +1214,24 @@ function buildLandmarks() {
 	const { xml: pickups, warnings } = buildPickups();
 	for (const w of warnings) console.warn(`  ~ ${w}`);
 
-	return document([...structures, pickups]);
+	return model("Landmarks", [...structures, pickups]);
 }
 
 mkdirSync(OUT_DIR, { recursive: true });
 
+// Each builder returns its top-level model as raw XML; `document()` wraps it in
+// the <roblox> root that Studio expects.
+const forest = buildForest();
+const landmarks = buildLandmarks();
+const monster = buildMonster();
+
 const files = {
-	"Forest.rbxmx": buildForest(),
-	"Landmarks.rbxmx": buildLandmarks(),
-	"Monster.rbxmx": buildMonster(),
+	"Forest.rbxmx": document([forest]),
+	"Landmarks.rbxmx": document([landmarks]),
+	"Monster.rbxmx": document([monster]),
+	// A single droppable file with the exact Workspace.Night99 shape the scripts
+	// expect. For people who just want to open Studio and play, without Rojo.
+	"Night99.rbxmx": document([model("Night99", [forest, landmarks, monster])]),
 };
 
 for (const [name, xml] of Object.entries(files)) {

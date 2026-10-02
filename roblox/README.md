@@ -13,28 +13,70 @@ version controlled.
 
 ---
 
-## Quick start
+## Play it in Studio — no install needed
 
-Everything below runs from this directory:
+This is the fastest way to see it working. You only need Roblox Studio, which you
+already have installed. Nothing to download, no Rojo, no plugins.
+
+**1. Open a place.** Launch Roblox Studio and use the **Baseplate** template.
+
+**2. Drop the map in.** Open `generated/Night99.rbxmx` in Windows Explorer and drag
+it onto **Workspace** in Studio's Explorer panel. You should see a model called
+`Night99` appear containing `Forest`, `Landmarks` and `Monster` — about 3,265 parts.
+Switch the viewport to see it.
+
+**3. Paste the code.** Open `generated/InstallNight99.lua` in any text editor, select
+all, copy. In Studio go to **View → Command Window**, paste, press **Enter**.
+
+You should see three `[Night99]` lines in the Output confirming the 14 scripts were
+created. This is safe to repeat: it replaces `Source` on scripts that already exist.
+
+**4. Set Lighting.** **Properties → Lighting → Technology** → **Future** (or leave
+**ShadowMap**). This one property cannot be set from a script — everything else in
+`LightingService` is applied at runtime.
+
+**5. Press Play.** You spawn in the fire-pit clearing with a battery at 100 and the
+flashlight off.
+
+### What to look for when you press Play
+
+| Try | Expected |
+| --- | --- |
+| Press **F** | A spot light switches on; the cone gets shorter and dimmer as the battery drains |
+| Watch the leaderboard | `Battery` falls while lit, trickles back up while dark |
+| Walk to a glowing amber box | `+40` battery, box respawns after 25s |
+| Stand still in the dark for a while | The vignette reddens and a heartbeat ramps up as something closes in |
+| Get within ~40 studs with the light on | The monster turns and backs off |
+| Let the battery drop under 34% | The light stops working as a weapon — this is the intended tension |
+
+If the Output window shows red, the most likely cause is the map not being at
+`Workspace.Night99`. `ServerScriptService.Night99.Main` waits for it, so check you
+dragged into **Workspace** and not into some other folder.
+
+---
+
+## Day-to-day development (Rojo)
+
+Redo edits by running `npm run build`, then re-paste the installer. For live syncing
+without copy-paste, use Rojo:
 
 ```bash
 cd roblox               # only if you cloned this alongside the Unity project
-npm install             # luaparse, for the Lua syntax check
-npm run check          # syntax + cross-reference check
-npm run build          # regenerate the map (only needed if you edit the generator)
+npm install             # luaparse, for the static checks
+npm run check           # syntax + cross-reference + installer check
+npm test                # the above, plus map audit and fault injection
 
-rojo serve             # then connect Studio with the Rojo plugin
+rojo serve              # then connect Studio with the Rojo plugin
 ```
 
 1. Install the **Rojo Studio plugin** and point it at the port `rojo serve` prints.
 2. Open your place (or `rojo build -o Night99.rbxl` to create one).
 3. Press **Play**. You should spawn in the fire pit clearing.
 
-### One manual step
-
-`Lighting.Technology` cannot be set from a script. In Studio, open
-**Properties → Lighting → Technology** and set it to **Future** (or leave
-**ShadowMap**). Everything else in `LightingService` is applied at runtime.
+> If `rojo` is blocked from running, that is usually Smart App Control or a WDAC/AppLocker
+> policy rejecting unsigned executables. `Windows Security → App & browser control →
+> Smart App Control` can be switched off, but it is a one-way door (re-enabling needs a
+> Windows reset), which is why the paste route above exists.
 
 ---
 
@@ -42,18 +84,25 @@ rojo serve             # then connect Studio with the Rojo plugin
 
 ```
 default.project.json      Rojo project definition
-generated/                The map, as .rbxmx (regenerate with `npm run build`)
+generated/                Build output -- all of it is plain text, reviewable in git
+  Night99.rbxmx           Whole map in one droppable file (Workspace.Night99)
   Forest.rbxmx            Ground, boundary, trees, scatter
   Landmarks.rbxmx         8 landmarks + 14 battery pickups + spawns
   Monster.rbxmx           The monster model
+  InstallNight99.lua      Paste-into-Studio script installer (see above)
 src/shared/               Config + the RemoteEvent accessor
 src/server/               Authoritative game logic
 src/client/               Flashlight, HUD, camera, monster tracker
 tools/
   build-map.mjs           Generates generated/*.rbxmx from a fixed seed
+  build-installer.mjs     Generates generated/InstallNight99.lua
+  mounts.mjs              Where src/** lands in the DataModel, shared by both
   rbxxml.mjs              Minimal .rbxmx writer
   check-lua.mjs           Lua parse check
   check-refs.mjs          require/remote/map-name cross-reference check
+  check-install.mjs       Proves the installer matches src/ byte-for-byte
+  audit-map.mjs           Map layout audit
+  test-check-install.ps1  Fault injection for check-install.mjs
 ```
 
 `Workspace.Night99` holds everything map-related, so it never collides with
@@ -139,7 +188,7 @@ rig the Unity original used.
 
 ## Checks
 
-`npm run check` runs two things Studio would otherwise catch for you:
+`npm run check` runs three things Studio would otherwise catch for you:
 
 - **`check-lua.mjs`** — parses every `.lua` file (catches syntax errors).
 - **`check-refs.mjs`** — builds the instance tree Rojo would produce from
@@ -147,9 +196,16 @@ rig the Unity original used.
   real ModuleScript, every awaited RemoteEvent is created by `Net.lua`, every
   cross-service call exists, every `Config.*` key read is defined, and every
   `workspace:WaitForChild(...)` name exists in the generated map.
+- **`check-install.mjs`** — parses `generated/InstallNight99.lua` and diffs every
+  embedded source against `src/`, so the paste installer can never ship a stale or
+  mangled copy of a script.
 
-Both are validated against deliberately broken copies of the project, so a clean
-run means something.
+`npm test` adds `audit-map.mjs` (no tree inside a clearing, no pickup buried in
+geometry, no spawn point in the pit) and `test-check-install.ps1`, which corrupts
+the installer four ways and asserts the checker fails each time.
+
+All of these are validated against deliberately broken copies of the project, so a
+clean run means something.
 
 ---
 
@@ -164,6 +220,6 @@ run means something.
   `MonsterService.Init` at it — only `Body` is used as the pivot, and the
   transform is driven by `PivotTo`, so an animated Model works as-is.
 - **Not play-tested in Studio.** Everything here is validated statically (see
-  Checks), not at runtime. First thing to verify by hand is that the flashlight
-  toggle, monster chase and battery drain feel right at your chosen
-  `Config` values.
+  Checks), not at runtime. The play-test checklist is at the top of this file;
+  the things most worth looking at first are the flashlight toggle, the monster
+  chase, and whether the battery drain feels right at your chosen `Config` values.
