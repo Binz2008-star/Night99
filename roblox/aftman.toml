@@ -1,0 +1,6 @@
+# Pinned tool versions. Install with Aftman (https://github.com/LPGhatguy/aftman):
+#   aftman install
+#
+# Rojo 7.x reads default.project.json and rbxmx v4, which is what this
+# project targets.
+rojo = "LPGhatguy/rojo@7.5.1"

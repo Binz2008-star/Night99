@@ -1,0 +1,25 @@
+# Rojo / Roblox
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx.lock
+*.rbxl.lock
+sourcemap.json
+Packages/
+ServerPackages/
+!Packages/manifest.json
+
+# Rojo build output
+Night99.rbxl
+Night99.rbxlx
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

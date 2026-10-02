@@ -1,0 +1,50 @@
+{
+  "name": "Night99",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Night99": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Night99": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Workspace": {
+      "Night99": {
+        "Forest": {
+          "$path": "generated/Forest.rbxmx"
+        },
+        "Landmarks": {
+          "$path": "generated/Landmarks.rbxmx"
+        },
+        "Monster": {
+          "$path": "generated/Monster.rbxmx"
+        }
+      }
+    },
+    "Lighting": {
+      "properties": {
+        "GlobalShadows": true,
+        "ShadowSoftness": 0.2,
+        "EnvironmentDiffuseScale": 0.4,
+        "EnvironmentSpecularScale": 0.6,
+        "Brightness": 1.0,
+        "ExposureCompensation": 0.1,
+        "ClockTime": 0.5,
+        "FogStart": 30,
+        "FogEnd": 165,
+        "GlobalTransparency": 0
+      }
+    }
+  }
+}
