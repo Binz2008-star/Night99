@@ -106,6 +106,9 @@ generated/                Build output -- all of it is plain text, reviewable in
   InstallNight99.lua      Paste-into-Studio script installer (see above)
   install-parts/          The same 14 scripts as six small pastes, for when one
                           paste is too big for wherever you are pasting it
+  manifest.json           Every script: target instance, class, absolute source
+                          path, byte size — for installing with a Studio MCP tool
+                          instead of a paste
 src/shared/               Config + the RemoteEvent accessor
 src/server/               Authoritative game logic
 src/client/               Flashlight, HUD, camera, monster tracker
@@ -226,13 +229,15 @@ rig the Unity original used.
 - **`check-install.mjs`** — parses `generated/InstallNight99.lua` and every file in
   `generated/install-parts/`, then diffs each embedded source against `src/`, so a
   paste installer can never ship a stale or mangled copy of a script. Also checks
-  the parts cover each script exactly once, and that every target path matches what
+  the parts cover each script exactly once, that every target path matches what
   Rojo would create — the installer and `rojo serve` are two ways to install the
-  same scripts and must never disagree about where one lives.
+  same scripts and must never disagree about where one lives — and that
+  `manifest.json` still lists every script with the right class, source path and
+  byte size.
 
 `npm test` adds `audit-map.mjs` (no tree inside a clearing, no pickup buried in
 geometry, no spawn point in the pit) and `test-check-install.ps1`, which breaks the
-installers seven ways and asserts the checker fails each time.
+generated artifacts ten ways and asserts the checker fails each time.
 
 All of these are validated against deliberately broken copies of the project, so a
 clean run means something. That last point is not decoration: the cross-reference

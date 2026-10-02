@@ -224,6 +224,22 @@ for (const path of onDisk.keys()) {
 	if (!covered.has(path)) errors.push(`install-parts: no part covers ${path}`);
 }
 
+/**
+ * "ReplicatedStorage.Shared.Config" -> "src/shared/Config.lua"
+ *
+ * The inverse of mountPath, used to confirm the manifest points at the same file
+ * the installer embeds rather than at a plausible-looking neighbour.
+ */
+function relativeToSrc(instancePath) {
+	for (const mount of MOUNTS) {
+		const prefix = [mount.service, ...mount.dirs].join(".");
+		if (instancePath.startsWith(`${prefix}.`)) {
+			return `${mount.dir}/${instancePath.slice(prefix.length + 1)}.lua`;
+		}
+	}
+	return instancePath;
+}
+
 // --- the installer and Rojo must target the same instances ---------------------
 //
 // The paste installer and `rojo serve` are two ways to install the same scripts.
@@ -243,6 +259,39 @@ try {
 	errors.push(`cannot cross-check against default.project.json: ${err.message}`);
 }
 
+// --- the manifest ---------------------------------------------------------------
+// generated/manifest.json is for installing via a Studio MCP tool rather than a
+// paste. It is regenerated on every build, but "regenerated" is not the same as
+// "correct", so it gets checked against disk too.
+let manifestCount = 0;
+try {
+	const manifest = JSON.parse(readFileSync(`${GENERATED}/manifest.json`, "utf8"));
+	const listed = new Map((manifest.scripts ?? []).map((s) => [s.instancePath, s]));
+
+	for (const [path, want] of onDisk) {
+		const got = listed.get(path);
+		if (!got) {
+			errors.push(`manifest.json: does not list ${path}`);
+			continue;
+		}
+		manifestCount++;
+		if (got.className !== want.className) {
+			errors.push(`manifest.json: wrong className for ${path} -- says ${got.className}, expected ${want.className}`);
+		}
+		if (got.bytes !== Buffer.byteLength(want.source, "utf8")) {
+			errors.push(`manifest.json: byte count for ${path} is stale (${got.bytes}, actual ${Buffer.byteLength(want.source, "utf8")})`);
+		}
+		if (typeof got.sourcePath !== "string" || !got.sourcePath.endsWith(`/${relativeToSrc(path)}`)) {
+			errors.push(`manifest.json: sourcePath for ${path} is wrong or missing -- got ${JSON.stringify(got.sourcePath)}`);
+		}
+	}
+	for (const path of listed.keys()) {
+		if (!onDisk.has(path)) errors.push(`manifest.json: lists ${path}, which is not a file in src/`);
+	}
+} catch (err) {
+	errors.push(`cannot verify generated/manifest.json: ${err.message}`);
+}
+
 // --- report --------------------------------------------------------------------
 if (errors.length > 0) {
 	for (const e of errors) console.error(`  X  ${e}`);
@@ -253,4 +302,5 @@ if (errors.length > 0) {
 console.log(`  .  InstallNight99.lua parses, ${wholeCount} scripts byte-identical to src/`);
 console.log(`  .  install-parts/ ${partFiles.length} parts cover the same ${covered.size} scripts`);
 console.log(`  .  all ${rojoMatch} target paths match what Rojo would create`);
+console.log(`  .  manifest.json lists all ${manifestCount} scripts with the right class, path and size`);
 console.log("Installer OK.");

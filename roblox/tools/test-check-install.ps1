@@ -12,6 +12,7 @@ $generated = Join-Path $root "generated"
 $file = Join-Path $generated "InstallNight99.lua"
 $partsDir = Join-Path $generated "install-parts"
 $projectFile = Join-Path $root "default.project.json"
+$manifestFile = Join-Path $generated "manifest.json"
 $backupDir = Join-Path $generated ".install-backup"
 
 function Invoke-Checker {
@@ -36,6 +37,7 @@ New-Item -ItemType Directory -Force $backupDir | Out-Null
 Copy-Item $file $backupDir -Force
 Copy-Item $partsDir (Join-Path $backupDir "install-parts") -Recurse -Force
 Copy-Item $projectFile (Join-Path $backupDir "default.project.json") -Force
+Copy-Item $manifestFile (Join-Path $backupDir "manifest.json") -Force
 
 $original = Get-Content $file -Raw
 
@@ -44,6 +46,7 @@ function Restore {
     if (Test-Path $partsDir) { Remove-Item $partsDir -Recurse -Force }
     Copy-Item (Join-Path $backupDir "install-parts") $partsDir -Recurse -Force
     Copy-Item (Join-Path $backupDir "default.project.json") $projectFile -Force
+    Copy-Item (Join-Path $backupDir "manifest.json") $manifestFile -Force
 }
 
 # Never corrupt a good baseline: if the installers are already dirty, regenerating
@@ -113,6 +116,25 @@ Test-Fault "installer and Rojo disagree on an instance name" {
     $text = (Get-Content $projectFile -Raw) -replace '"Shared"\s*:\s*\{\s*(\r?\n\s*)"\$path"', '"RenamedShared": {$1"$path"'
     [System.IO.File]::WriteAllText($projectFile, $text)
 } "rojo disagreement: installer targets ReplicatedStorage\.Shared\.Config"
+
+Test-Fault "stale byte count in manifest.json" {
+    $text = (Get-Content $manifestFile -Raw) -replace '"bytes": 2063', '"bytes": 2064'
+    [System.IO.File]::WriteAllText($manifestFile, $text)
+} "byte count for ReplicatedStorage\.Shared\.Config is stale"
+
+Test-Fault "manifest.json points at the wrong source file" {
+    $text = (Get-Content $manifestFile -Raw) -replace 'src/shared/Config\.lua', 'src/server/Config.lua'
+    [System.IO.File]::WriteAllText($manifestFile, $text)
+} "sourcePath for ReplicatedStorage\.Shared\.Config is wrong"
+
+Test-Fault "drop a script from manifest.json" {
+    # Done via JSON round-trip, not regex: a regex that only removes the object body
+    # leaves a dangling comma, so the manifest fails to parse and the test would pass
+    # for a reason that has nothing to do with the missing entry.
+    $j = Get-Content $manifestFile -Raw | ConvertFrom-Json
+    $j.scripts = @($j.scripts | Where-Object { $_.instancePath -ne "ReplicatedStorage.Shared.Remote" })
+    [System.IO.File]::WriteAllText($manifestFile, ($j | ConvertTo-Json -Depth 5))
+} "manifest\.json: does not list ReplicatedStorage\.Shared\.Remote"
 
 # Always restore, then prove the restore worked.
 Restore
